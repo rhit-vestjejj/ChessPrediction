@@ -1,0 +1,31 @@
+# Data
+data/
+*.csv
+*.parquet
+*.pkl
+*.npy
+*.npz
+*.h5
+*.hdf5
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+
+# Logs and outputs
+logs/
+outputs/
+checkpoints/
+*.log
+
+# Jupyter
+.ipynb_checkpoints/
