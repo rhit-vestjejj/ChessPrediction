@@ -16,7 +16,7 @@ venv/
 .env
 
 # Model checkpoints
-*.pt
+
 *.pth
 *.ckpt
 *.safetensors
