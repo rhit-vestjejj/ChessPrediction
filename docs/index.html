@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Read My Move</title>
+  <meta name="description" content="Play chess while a transformer trained on human games tries to predict every move you make.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><text y='32' font-size='32'>♞</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.19.2/dist/ort.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">♞</span>
+      <div>
+        <h1>Read My Move</h1>
+        <p class="tagline">A transformer trained on human games guesses your next move before you make it.</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="board-col">
+      <div class="board-shell">
+        <div id="board" class="board" aria-label="Chess board"></div>
+        <div id="promo" class="promo" hidden></div>
+        <div id="loading" class="loading">
+          <p id="loading-text">Loading model…</p>
+          <div class="progress"><div id="loading-bar"></div></div>
+          <p class="muted small">~21&nbsp;MB, runs entirely in your browser</p>
+        </div>
+      </div>
+      <p id="status" class="status">&nbsp;</p>
+    </section>
+
+    <aside class="panel">
+      <div class="card setup">
+        <h2>Setup</h2>
+        <label class="field">
+          <span class="field-row"><span>Your rating</span><output id="elo-out" class="mono">1500</output></span>
+          <input id="elo" type="range" min="600" max="2400" step="100" value="1500">
+        </label>
+        <label class="field">
+          <span>Opponent</span>
+          <select id="bot"></select>
+        </label>
+        <div class="field">
+          <span>Play as</span>
+          <div class="segmented" role="radiogroup">
+            <label><input type="radio" name="color" value="w" checked><span>White</span></label>
+            <label><input type="radio" name="color" value="b"><span>Black</span></label>
+            <label><input type="radio" name="color" value="r"><span>Random</span></label>
+          </div>
+        </div>
+        <button id="new-game" class="btn" disabled>New game</button>
+      </div>
+
+      <div class="card">
+        <h2>Model's guess</h2>
+        <div id="lock" class="lock-line" hidden></div>
+        <div id="guess" class="guess">
+          <p class="muted">Start a game. Before each of your moves the model locks in a prediction, then reveals it after you play.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Mind-reading score</h2>
+        <div class="stats">
+          <div class="stat"><span class="stat-num mono" id="s-top1">–</span><span class="stat-label">Exact guess</span><span class="stat-ref" id="s-top1-n"></span></div>
+          <div class="stat"><span class="stat-num mono" id="s-top3">–</span><span class="stat-label">In top 3</span><span class="stat-ref" id="s-top3-n"></span></div>
+          <div class="stat"><span class="stat-num mono" id="s-avgp">–</span><span class="stat-label">Avg. confidence in your move</span></div>
+        </div>
+        <p class="muted small">On held-out human games the model gets 41.6% exact and 68.5% top-3.</p>
+      </div>
+
+      <div class="card">
+        <h2>Moves</h2>
+        <ol id="moves" class="moves"></ol>
+        <p class="legend small muted"><span class="dot hit"></span>exact <span class="dot near"></span>top 3 <span class="dot miss"></span>missed</p>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    <p>
+      6-layer transformer (~5M params) over the 64 squares with piece-relative attention bias, conditioned on both players' ratings.
+      Trained on 100k rated human games. <a href="https://github.com/rhit-vestjejj/ChessPrediction">Source on GitHub</a>.
+    </p>
+    <p class="small muted">Piece art by Cburnett (CC BY-SA 3.0) via cm-chessboard.</p>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
