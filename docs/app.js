@@ -1,6 +1,7 @@
 import { Chess } from 'https://cdn.jsdelivr.net/npm/chess.js@1.0.0/dist/esm/chess.js';
 import { loadModel, predict, uciOf } from './model.js';
 import { BOTS } from './bots.js';
+import { initEngine } from './engine.js';
 
 const $ = id => document.getElementById(id);
 const FILES = 'abcdefgh';
@@ -9,7 +10,7 @@ const state = {
   game: new Chess(),
   userColor: 'w',
   userElo: 1500,
-  botKey: 'model1200',
+  botKey: 'sf1400',
   pending: null,        // Promise<predictions> for the user's current turn
   selected: null,
   busy: true,
@@ -27,10 +28,7 @@ for (const [key, bot] of Object.entries(BOTS)) {
   opt.textContent = bot.label;
   $('bot').append(opt);
 }
-// model bots first in the list
-const sel = $('bot');
-[...sel.options].filter(o => o.value.startsWith('model')).reverse().forEach(o => sel.prepend(o));
-sel.value = state.botKey;
+$('bot').value = state.botKey;
 
 $('elo').addEventListener('input', e => { $('elo-out').textContent = e.target.value; });
 $('new-game').addEventListener('click', newGame);
@@ -329,7 +327,10 @@ function renderMoves() {
 /* ---------- boot ---------- */
 
 render();
-loadModel(f => { $('loading-bar').style.width = `${Math.round(f * 100)}%`; })
+Promise.all([
+  loadModel(f => { $('loading-bar').style.width = `${Math.round(f * 100)}%`; }),
+  initEngine(),
+])
   .then(() => {
     $('loading').hidden = true;
     $('new-game').disabled = false;
@@ -337,5 +338,5 @@ loadModel(f => { $('loading-bar').style.width = `${Math.round(f * 100)}%`; })
   })
   .catch(err => {
     console.error(err);
-    $('loading-text').textContent = `Couldn't load the model: ${err.message}`;
+    $('loading-text').textContent = `Couldn't load: ${err.message}`;
   });

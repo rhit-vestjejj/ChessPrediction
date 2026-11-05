@@ -1,28 +1,32 @@
-import { predict } from './model.js';
+import { engineMove } from './engine.js';
 
-const VALUE = { p: 1, n: 3, b: 3.2, r: 5, q: 9, k: 0 };
+// Opponents are Stockfish at different strengths. `elo` is what we tell the
+// prediction model the opponent is rated (it's one of the model's inputs).
+// UCI_Elo is Stockfish's own calibration (anchored at 120s+1s games), so the
+// numbered levels are approximate.
 
-function material(game) {
-  // score from the perspective of the side to move
-  let s = 0;
-  for (const row of game.board()) for (const p of row) if (p) s += (p.color === 'w' ? 1 : -1) * VALUE[p.type];
-  return game.turn() === 'w' ? s : -s;
+function fromUci(game, uci) {
+  return game.moves({ verbose: true }).find(m => m.from + m.to + (m.promotion || '') === uci);
 }
 
-function negamax(game, depth) {
-  if (game.isCheckmate()) return -1000 - depth;
-  if (game.isDraw()) return 0;
-  if (depth === 0) return material(game);
-  let best = -Infinity;
-  for (const m of game.moves({ verbose: true })) {
-    game.move(m);
-    best = Math.max(best, -negamax(game, depth - 1));
-    game.undo();
-  }
-  return best;
+function stockfish(label, elo, opts) {
+  return {
+    label,
+    elo,
+    async pick(game) {
+      const uci = await engineMove(game.fen(), opts);
+      return fromUci(game, uci);
+    },
+  };
 }
 
 export const BOTS = {
+  sf_beginner: stockfish('Beginner (~800)', 800, { skill: 0, depth: 1, movetime: 300 }),
+  sf_casual: stockfish('Casual (~1100)', 1100, { skill: 2, depth: 3, movetime: 400 }),
+  sf1400: stockfish('Stockfish 1400', 1400, { elo: 1400 }),
+  sf1700: stockfish('Stockfish 1700', 1700, { elo: 1700 }),
+  sf2000: stockfish('Stockfish 2000', 2000, { elo: 2000 }),
+  sf2400: stockfish('Stockfish 2400', 2400, { elo: 2400 }),
   random: {
     label: 'Random mover',
     async pick(game) {
@@ -30,35 +34,4 @@ export const BOTS = {
       return ms[Math.floor(Math.random() * ms.length)];
     },
   },
-  material: {
-    label: 'Material grabber (2-ply)',
-    async pick(game) {
-      let best = -Infinity, choices = [];
-      for (const m of game.moves({ verbose: true })) {
-        game.move(m);
-        const score = -negamax(game, 1);
-        game.undo();
-        if (score > best + 1e-9) { best = score; choices = [m]; }
-        else if (Math.abs(score - best) < 1e-9) choices.push(m);
-      }
-      return choices[Math.floor(Math.random() * choices.length)];
-    },
-  },
 };
-
-for (const elo of [800, 1200, 1600, 2000]) {
-  BOTS[`model${elo}`] = {
-    label: `Model as a ${elo} player`,
-    elo,
-    async pick(game, whiteElo, blackElo) {
-      // Sample like a human would: sharpen a bit, drop long-tail moves.
-      const preds = await predict(game, whiteElo, blackElo);
-      const pool = preds.filter(x => x.p >= 0.03);
-      const weights = pool.map(x => Math.pow(x.p, 1 / 0.7));
-      const total = weights.reduce((a, b) => a + b, 0);
-      let r = Math.random() * total;
-      for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i].move; }
-      return preds[0].move;
-    },
-  };
-}
