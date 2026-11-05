@@ -16,18 +16,22 @@ let vocab = null;
 async function fetchWithProgress(url, onProgress) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to load ${url}: ${res.status}`);
+  // content-length may be the gzip size (GitHub Pages compresses), so it's only a progress hint.
   const total = Number(res.headers.get('content-length')) || 0;
-  if (!res.body || !total) return new Uint8Array(await res.arrayBuffer());
+  if (!res.body) return new Uint8Array(await res.arrayBuffer());
   const reader = res.body.getReader();
-  const buf = new Uint8Array(total);
+  const chunks = [];
   let got = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    buf.set(value, got);
+    chunks.push(value);
     got += value.length;
-    onProgress?.(got / total);
+    if (total) onProgress?.(Math.min(1, got / total));
   }
+  const buf = new Uint8Array(got);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.length; }
   return buf;
 }
 
