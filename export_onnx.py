@@ -1,7 +1,7 @@
-"""Export chess_model_best.pt to ONNX for the in-browser demo (docs/).
+"""Export chess_model_best_demo2.pt to ONNX for the in-browser demo (docs/).
 
-Model definition is copied from chess_lite_demo.ipynb (the version that produced
-chess_model_best.pt). `side` packs: turn + 2*castling_bits + 32*ep_file (8 = none). The exported graph returns raw
+Model definition is copied from chess_lite_demo_2.ipynb (the version that produced
+chess_model_best_demo2.pt, trained with FULL_GAB=True and vocab_demo2.json). `side` packs: turn + 2*castling_bits + 32*ep_file (8 = none). The exported graph returns raw
 logits (no legal-move mask); the browser masks illegal moves itself.
 
 Usage: python export_onnx.py [--quantize]
@@ -31,6 +31,24 @@ class PieceGeometricBias(nn.Module):
         return F.pad(bias, (0, self.num_extra, 0, self.num_extra))
 
 
+# Monroe and Chalmers, "Mastering Chess with a Transformer Model" (arXiv 2409.12272)
+class FullGeometricBias(nn.Module):
+    def __init__(self, num_heads, num_extra):
+        super().__init__()
+        sq = torch.arange(64)
+        file, rank = sq % 8, sq // 8
+        rel = (file[None, :] - file[:, None] + 7) * 15 + (rank[None, :] - rank[:, None] + 7)
+        self.register_buffer('rel', rel)
+        self.table = nn.Embedding(13 * 13 * 15 * 15, num_heads)
+        self.num_extra = num_extra
+
+    def forward(self, boards):
+        query, key = boards[:, :, None], boards[:, None, :]
+        index = query * (13 * 15 * 15) + key * (15 * 15) + self.rel[None]
+        bias = self.table(index).permute(0, 3, 1, 2)
+        return F.pad(bias, (0, self.num_extra, 0, self.num_extra))
+
+
 class EncoderBlock(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, dropout):
         super().__init__()
@@ -56,7 +74,7 @@ NUM_ELO_BUCKETS = 36
 
 
 class ChessModel(nn.Module):
-    def __init__(self, num_moves, d_model=256, num_heads=8, num_layers=6, d_ff=1024, elo_scale=0.3):
+    def __init__(self, num_moves, d_model=256, num_heads=8, num_layers=6, d_ff=1024, elo_scale=0.3, full_gab=True):
         super().__init__()
         self.elo_scale = elo_scale
         self.piece_emb = nn.Embedding(13, d_model)
@@ -67,7 +85,7 @@ class ChessModel(nn.Module):
         self.cls = nn.Parameter(torch.zeros(1, d_model))
         self.castle_emb = nn.Embedding(16, d_model)
         self.ep_emb = nn.Embedding(9, d_model)
-        self.bias = PieceGeometricBias(num_heads, 6)
+        self.bias = (FullGeometricBias if full_gab else PieceGeometricBias)(num_heads, 6)
         self.blocks = nn.ModuleList([EncoderBlock(d_model, num_heads, d_ff, 0.0) for _ in range(num_layers)])
         self.norm = nn.LayerNorm(d_model)
         self.head = nn.Linear(d_model, num_moves)
@@ -90,9 +108,10 @@ class ChessModel(nn.Module):
 
 
 def main():
-    vocab = json.load(open('vocab.json'))
-    state = torch.load('chess_model_best.pt', map_location='cpu')
-    state = {k.removeprefix('_orig_mod.'): v for k, v in state.items()}
+    vocab = json.load(open('vocab_demo2.json'))
+    ck = torch.load('chess_model_best_demo2.pt', map_location='cpu', weights_only=False)
+    print(f"Loaded best weights from epoch {ck['epoch'] + 1} (val top-1 {ck['best_top1']:.3f})")
+    state = {k.removeprefix('_orig_mod.'): v for k, v in ck['model'].items()}
     model = ChessModel(num_moves=len(vocab))
     model.load_state_dict(state)
     model.eval()
